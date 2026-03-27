@@ -1,0 +1,55 @@
+# 🔐 Environment variables
+
+.env
+.env.*
+
+# 🧾 Logs
+
+*.log
+server/tmp/
+tmp/
+
+# 🧠 Build outputs / binaries
+
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+server/server
+server/webide_server
+server/tmp/main
+
+# 📦 Go modules (optional to ignore vendor)
+
+vendor/
+
+# 🧹 OS files
+
+.DS_Store
+Thumbs.db
+
+# 🧪 IDE/editor
+
+.vscode/
+.idea/
+
+# 🧱 Node (frontend)
+
+node_modules/
+dist/
+build/
+
+# 🔥 Nested git (important)
+
+frontend/.git
+
+# 🧬 Coverage
+
+coverage.out
+
+# 🧪 Misc
+
+*.swp
