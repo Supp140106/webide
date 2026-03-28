@@ -1,128 +1,96 @@
 import { Tree } from "@/components/ui/file-tree"
-import type { TreeViewElement } from "@/components/ui/file-tree"
 import { useAuth } from "../context/AuthContext"
-import { LogOut, Settings } from "lucide-react"
-
-const ELEMENTS: TreeViewElement[] = [
-    {
-        id: "src",
-        type: "folder",
-        isSelectable: true,
-        name: "src",
-        children: [
-            {
-                id: "lib",
-                type: "folder",
-                isSelectable: true,
-                name: "lib",
-                children: [
-                    {
-                        id: "utils",
-                        isSelectable: true,
-                        name: "utils.ts",
-                    },
-                ],
-            },
-            {
-                id: "app",
-                type: "folder",
-                isSelectable: true,
-                name: "app",
-                children: [
-                    {
-                        id: "page",
-                        isSelectable: true,
-                        name: "page.tsx",
-                    },
-                    {
-                        id: "layout",
-                        isSelectable: true,
-                        name: "layout.tsx",
-                    },
-                ],
-            },
-            {
-                id: "components",
-                type: "folder",
-                isSelectable: true,
-                name: "components",
-                children: [
-                    {
-                        id: "header",
-                        isSelectable: true,
-                        name: "header.tsx",
-                    },
-                    {
-                        id: "ui",
-                        type: "folder",
-                        isSelectable: true,
-                        name: "ui",
-                        children: [
-                            {
-                                id: "button",
-                                isSelectable: true,
-                                name: "button.tsx",
-                            },
-                        ],
-                    },
-                    {
-                        id: "footer",
-                        isSelectable: true,
-                        name: "footer.tsx",
-                    },
-                ],
-            },
-        ],
-    },
-]
+import { useProject } from "../context/ProjectContext"
+import { LogOut, Settings, RefreshCw } from "lucide-react"
+import { useState } from "react"
+import { ConfirmModal } from "./ConfirmModal"
 
 export default function Sidebar() {
     const { user, logout } = useAuth()
+    const { fileTree, loadFileTree, setActiveFile, closeProject } = useProject()
+    const [isClosing, setIsClosing] = useState(false)
 
     return (
         <div
-            className="h-full bg-black text-white flex flex-col border-r border-zinc-800"
+            className="h-full bg-[#050505] text-zinc-300 flex flex-col border-r border-zinc-800/50"
             style={{
                 // Override the `bg-muted` class used by file-tree for selected items
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ["--muted" as any]: "0 0% 12%",             // zinc-900 background
+                ["--muted" as any]: "0 0% 8%",             // ultra dark background
                 ["--muted-foreground" as any]: "0 0% 100%", // white text
             }}
         >
             {/* Header */}
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                <span className="font-bold text-zinc-400 text-xs uppercase tracking-widest">Explorer</span>
-                <Settings size={14} className="text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors" />
+            <div className="p-3 px-4 border-b border-zinc-800/50 flex items-center justify-between">
+                <span className="font-medium text-zinc-500 text-[10px] uppercase tracking-widest">Explorer</span>
+                <div className="flex items-center gap-2">
+                    <RefreshCw 
+                        size={14} 
+                        className="text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors" 
+                        onClick={() => loadFileTree()}
+                    />
+                    <Settings size={14} className="text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors" />
+                </div>
             </div>
 
             {/* File Tree */}
             <div className="flex-1 overflow-auto p-2 custom-scrollbar">
-                <Tree
-                    elements={ELEMENTS}
-                    initialExpandedItems={["src", "components", "ui", "app", "lib"]}
-                    initialSelectedId="button"
-                    className="text-sm text-zinc-300 [&_*]:text-zinc-300 hover:[&_.folder]:text-white transition-colors"
-                />
+                {fileTree.length > 0 ? (
+                    <Tree
+                        elements={fileTree}
+                        initialExpandedItems={[]}
+                        onFileSelect={(id: string) => setActiveFile(id)}
+                        className="text-sm text-zinc-300 [&_*]:text-zinc-300 hover:[&_.folder]:text-white transition-colors"
+                    />
+                ) : (
+                    <div className="p-4 text-xs text-zinc-500 italic">
+                        No files found or project loading...
+                    </div>
+                )}
             </div>
 
             {/* User Profile */}
-            <div className="p-4 bg-zinc-900/50 border-t border-zinc-800">
-                <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-blue-900/20">
+            <div className="p-4 bg-[#0a0a0a] border-t border-zinc-800/50">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-8 h-8 bg-zinc-800 rounded-lg flex items-center justify-center text-zinc-300 font-medium text-xs shadow-inner border border-zinc-700/50">
                         {user?.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
+                        <p className="text-[13px] font-medium text-zinc-200 truncate">{user?.name}</p>
                         <p className="text-[10px] text-zinc-500 truncate">{user?.email}</p>
                     </div>
                 </div>
-                <button
-                    onClick={logout}
-                    className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg text-xs font-medium border border-zinc-700/50 transition-all active:scale-95"
-                >
-                    <LogOut size={14} />
-                    Sign Out
-                </button>
+                
+                <div className="flex flex-col gap-2">
+                    <button
+                        onClick={() => setIsClosing(true)}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-500/5 hover:bg-red-500/10 text-red-500/80 hover:text-red-400 rounded-lg text-xs font-medium border border-red-500/10 transition-all active:scale-95"
+                    >
+                        <LogOut size={14} />
+                        Close Project
+                    </button>
+                    
+                    <button
+                        onClick={logout}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-zinc-800/40 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 rounded-lg text-xs font-medium border border-zinc-800 hover:border-zinc-700 transition-all active:scale-95"
+                    >
+                        <LogOut size={14} />
+                        Sign Out
+                    </button>
+                </div>
+
+                <ConfirmModal
+                    isOpen={isClosing}
+                    title="Close Project"
+                    message="Are you sure you want to close this project? The environment will safely save your files to the database and cleanly stop."
+                    confirmText="Close Project"
+                    onCancel={() => setIsClosing(false)}
+                    onConfirm={async () => {
+                        await closeProject();
+                        setIsClosing(false);
+                        window.location.href = '/dashboard';
+                    }}
+                />
             </div>
         </div>
     )

@@ -7,7 +7,20 @@ import Sidebar from "./components/SideBar"
 import { Terminal } from "./components/Terminal"
 import { Editor } from "./components/Editor"
 
+import { useEffect } from "react"
+import { useParams } from "react-router-dom"
+import { useProject } from "./context/ProjectContext"
+
 export default function Ide() {
+    const { id } = useParams<{ id: string }>()
+    const { setActiveProjectID } = useProject()
+
+    useEffect(() => {
+        if (id) {
+            setActiveProjectID(id)
+        }
+    }, [id, setActiveProjectID])
+
     return (
         <ResizablePanelGroup
             orientation="horizontal"

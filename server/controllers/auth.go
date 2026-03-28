@@ -57,7 +57,7 @@ func VerifyOTP(c *gin.Context) {
 		Email    string `json:"email" binding:"required,email"`
 		Code     string `json:"code" binding:"required"`
 		Name     string `json:"name"`
-		Password string `json:"password"`
+		Password string `json:"password"` 
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

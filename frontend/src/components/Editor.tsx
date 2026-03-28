@@ -1,86 +1,59 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MonacoEditor from '@monaco-editor/react';
-import { X, Plus } from 'lucide-react';
+import { X, Save, FileCode } from 'lucide-react';
+import { useProject } from '../context/ProjectContext';
 
 interface Tab {
-  id: string;
+  id: string; // File path
   name: string;
   language: string;
   content: string;
+  isDirty: boolean;
 }
-
-const DEFAULT_TABS: Tab[] = [
-  {
-    id: 'page',
-    name: 'page.tsx',
-    language: 'typescript',
-    content: `import { useState } from 'react';
-
-export default function Page() {
-  const [count, setCount] = useState(0);
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-      <h1 className="text-4xl font-bold text-gray-900 mb-4">Hello, WebIDE!</h1>
-      <p className="text-lg text-gray-500 mb-8">
-        Start building something awesome.
-      </p>
-      <button
-        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-        onClick={() => setCount(c => c + 1)}
-      >
-        Count: {count}
-      </button>
-    </div>
-  );
-}
-`,
-  },
-  {
-    id: 'layout',
-    name: 'layout.tsx',
-    language: 'typescript',
-    content: `import type { ReactNode } from 'react';
-
-interface LayoutProps {
-  children: ReactNode;
-}
-
-export default function Layout({ children }: LayoutProps) {
-  return (
-    <html lang="en">
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>My WebIDE App</title>
-      </head>
-      <body>{children}</body>
-    </html>
-  );
-}
-`,
-  },
-];
-
-const LANG_COLOR: Record<string, string> = {
-  typescript: 'text-blue-400',
-  javascript: 'text-yellow-400',
-  css: 'text-pink-400',
-  json: 'text-orange-400',
-};
-
-const LANG_BADGE: Record<string, string> = {
-  typescript: 'TSX',
-  javascript: 'JS',
-  css: 'CSS',
-  json: 'JSON',
-};
 
 export function Editor() {
-  const [tabs, setTabs] = useState<Tab[]>(DEFAULT_TABS);
-  const [activeId, setActiveId] = useState<string>(DEFAULT_TABS[0].id);
+  const { activeFile, setActiveFile, openFile, saveFile } = useProject();
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  const activeTab = tabs.find(t => t.id === activeId) ?? tabs[0];
+  // When a file is selected in sidebar (from context)
+  useEffect(() => {
+    if (activeFile) {
+        loadFile(activeFile);
+    }
+  }, [activeFile]);
+
+  const loadFile = async (path: string) => {
+    // Check if already open
+    if (tabs.find(t => t.id === path)) {
+        setActiveId(path);
+        return;
+    }
+
+    const content = await openFile(path);
+    const name = path.split('/').pop() || path;
+    const ext = name.split('.').pop() || '';
+    
+    let language = 'plaintext';
+    if (['ts', 'tsx'].includes(ext)) language = 'typescript';
+    else if (['js', 'jsx'].includes(ext)) language = 'javascript';
+    else if (ext === 'css') language = 'css';
+    else if (ext === 'json') language = 'json';
+    else if (ext === 'html') language = 'html';
+
+    const newTab: Tab = {
+        id: path,
+        name,
+        language,
+        content,
+        isDirty: false
+    };
+
+    setTabs(prev => [...prev, newTab]);
+    setActiveId(path);
+  };
+
+  const activeTab = tabs.find(t => t.id === activeId);
 
   const closeTab = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -88,37 +61,58 @@ export function Editor() {
     setTabs(remaining);
     if (activeId === id && remaining.length > 0) {
       setActiveId(remaining[remaining.length - 1].id);
+    } else if (remaining.length === 0) {
+      setActiveId(null);
+      setActiveFile(null);
     }
   };
 
   const handleChange = (value: string | undefined) => {
     setTabs(prev =>
-      prev.map(t => (t.id === activeId ? { ...t, content: value ?? '' } : t))
+      prev.map(t => (t.id === activeId ? { ...t, content: value ?? '', isDirty: true } : t))
     );
   };
 
+  const handleSave = async () => {
+    if (activeTab && activeTab.isDirty) {
+        await saveFile(activeTab.id, activeTab.content);
+        setTabs(prev =>
+            prev.map(t => (t.id === activeId ? { ...t, isDirty: false } : t))
+        );
+    }
+  };
+
+  if (!activeTab) {
+    return (
+        <div className="flex-1 flex flex-col items-center justify-center bg-[#0d1117] text-slate-600">
+            <FileCode size={64} className="mb-4 opacity-20" />
+            <p className="text-sm">Select a file to start editing</p>
+        </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full bg-[#0d1117]">
+    <div className="flex flex-col h-full bg-[#050505]">
       {/* Tab Bar */}
       <div className="flex items-center bg-[#010409] border-b border-slate-800/60 overflow-x-auto shrink-0">
         {tabs.map(tab => (
           <div
             key={tab.id}
-            onClick={() => setActiveId(tab.id)}
+            onClick={() => {
+                setActiveId(tab.id);
+                setActiveFile(tab.id);
+            }}
             className={`
               group flex items-center gap-2 px-4 py-2.5 cursor-pointer border-r border-slate-800/60
               text-xs transition-all select-none shrink-0
               ${
                 activeId === tab.id
-                  ? 'bg-[#0d1117] text-slate-200 border-t-2 border-t-blue-500'
+                  ? 'bg-[#050505] text-slate-200 border-t-2 border-t-blue-500'
                   : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/50'
               }
             `}
           >
-            <span className={`text-[10px] font-bold ${LANG_COLOR[tab.language] ?? 'text-slate-400'}`}>
-              {LANG_BADGE[tab.language] ?? ''}
-            </span>
-            <span className="font-medium">{tab.name}</span>
+            <span className="font-medium">{tab.name}{tab.isDirty && '*'}</span>
             <button
               onClick={e => closeTab(e, tab.id)}
               className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
@@ -127,16 +121,19 @@ export function Editor() {
             </button>
           </div>
         ))}
-        {/* New Tab Button */}
-        <button className="px-3 py-2.5 text-slate-600 hover:text-slate-300 transition-colors shrink-0">
-          <Plus className="w-4 h-4" />
+        <button 
+            onClick={handleSave}
+            className="ml-auto px-4 text-blue-500 hover:text-blue-400 disabled:opacity-50 flex items-center gap-1.5 text-xs font-semibold"
+            disabled={!activeTab.isDirty}
+        >
+            <Save size={14} />
+            Save
         </button>
       </div>
 
       {/* Breadcrumb */}
-      <div className="px-4 py-1.5 text-[11px] text-slate-500 border-b border-slate-800/40 bg-[#0d1117] font-mono shrink-0">
-        src <span className="mx-1 text-slate-700">/</span> app <span className="mx-1 text-slate-700">/</span>{' '}
-        <span className="text-slate-400">{activeTab.name}</span>
+      <div className="px-4 py-1.5 text-[11px] text-slate-500 border-b border-slate-800/40 bg-[#050505] font-mono shrink-0">
+        <span className="text-slate-400">{activeTab.id}</span>
       </div>
 
       {/* Monaco Editor */}
@@ -147,6 +144,16 @@ export function Editor() {
           language={activeTab.language}
           value={activeTab.content}
           onChange={handleChange}
+          onMount={(_editor, monaco) => {
+            monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+              noSemanticValidation: true,
+              noSyntaxValidation: false, // Keep syntax checks for basic errors
+            });
+            monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+              noSemanticValidation: true,
+              noSyntaxValidation: false,
+            });
+          }}
           theme="vs-dark"
           options={{
             fontSize: 13,
