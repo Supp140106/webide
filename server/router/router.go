@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"server/controllers"
 	"server/middleware"
+	"server/ws"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,9 +21,8 @@ func SetupRoutes(r *gin.Engine) {
 		auth.POST("/send-otp", controllers.SendOTP)
 		auth.POST("/verify-otp", controllers.VerifyOTP)
 		auth.POST("/login", controllers.Login)
+		auth.GET("/invite/:token", controllers.VerifyInvite)
 	}
-
-
 
 	// Protected routes
 	protected := r.Group("/user")
@@ -44,8 +44,9 @@ func SetupRoutes(r *gin.Engine) {
 		protected.GET("/projects/:id/tree", controllers.GetFileTree)
 		protected.GET("/projects/:id/file", controllers.GetFileContent)
 		protected.POST("/projects/:id/file", controllers.SaveFileContent)
+		protected.POST("/projects/:id/share", controllers.ShareProject)
 	}
 
-	// WebSocket route (can be outside protected group or inside if using token in query/header)
-	r.GET("/ws/terminal/:id", controllers.TerminalWebsocket)
+	// Modular WebSocket route
+	r.GET("/ws/:id", ws.ServeWS)
 }

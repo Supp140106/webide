@@ -3,6 +3,7 @@ package main
 import (
 	"server/config"
 	"server/router"
+	"server/ws"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -15,6 +16,9 @@ func initializer() {
 
 func main() {
 	initializer()
+
+	// Start character-level / file-level broadcast hub
+	go ws.GlobalHub.Run()
 
 	r := gin.Default()
 

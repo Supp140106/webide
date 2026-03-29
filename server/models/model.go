@@ -31,6 +31,24 @@ type Project struct {
 	User          User      `gorm:"foreignKey:UserID" json:"-"`
 	Files         []File    `gorm:"foreignKey:ProjectID;constraint:OnDelete:CASCADE" json:"files,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
+
+type ProjectAccess struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	ProjectID uuid.UUID `gorm:"type:uuid;not null" json:"projectId"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null" json:"userId"`
+	Project   Project   `gorm:"foreignKey:ProjectID"`
+	User      User      `gorm:"foreignKey:UserID"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type ProjectInvite struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+	ProjectID uuid.UUID `gorm:"type:uuid;not null" json:"projectId"`
+	Email     string    `gorm:"not null" json:"email"`
+	Token     string    `gorm:"not null;uniqueIndex" json:"token"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type File struct {

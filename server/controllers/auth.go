@@ -7,6 +7,7 @@ import (
 	"server/models"
 	"server/service"
 	"server/utils"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -110,6 +111,20 @@ func VerifyOTP(c *gin.Context) {
 		if err := config.DB.Create(&user).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 			return
+		}
+
+		// Check for pending invites
+		var invites []models.ProjectInvite
+		// Invitation emails are stored in lowercase in the database
+		config.DB.Where("email = ?", strings.ToLower(user.Email)).Find(&invites)
+		for _, invite := range invites {
+			access := models.ProjectAccess{
+				ID:        uuid.New(),
+				ProjectID: invite.ProjectID,
+				UserID:    user.ID,
+			}
+			config.DB.Create(&access)
+			config.DB.Delete(&invite)
 		}
 	} else {
 		// User exists, mark as verified if not already (Login)
