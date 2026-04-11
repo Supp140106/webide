@@ -19,7 +19,7 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:3000/auth/login', { email, password }, { withCredentials: true });
+      const res = await axios.post('/api/auth/login', { email, password }, { withCredentials: true });
       login(res.data.token, res.data.user);
       toast.success('Access granted. Welcome to the kernel.');
       navigate('/dashboard');
@@ -34,7 +34,7 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post('http://localhost:3000/auth/send-otp', { email }, { withCredentials: true });
+      await axios.post('/api/auth/send-otp', { email }, { withCredentials: true });
       setOtpStep(2);
       toast.success('Transmission sent. Check your secure inbox.');
     } catch (err: any) {
@@ -48,7 +48,7 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:3000/auth/verify-otp', { email, code: otp }, { withCredentials: true });
+      const res = await axios.post('/api/auth/verify-otp', { email, code: otp }, { withCredentials: true });
       login(res.data.token, res.data.user);
       toast.success('Identity verified. Accessing workspace.');
       navigate('/dashboard');

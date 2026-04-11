@@ -4,15 +4,22 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { useProject } from '../context/ProjectContext';
-import { Terminal as TerminalIcon, Plus, X, Globe } from 'lucide-react';
+import { Plus, X, Globe, SquareTerminal, Rocket } from 'lucide-react';
 import axios from 'axios';
 
 interface Session {
   id: string;
   name: string;
+  index: number;
 }
 
-function TerminalInstance({ isActive, projectId, welcomePort }: { isActive: boolean, projectId: string, welcomePort?: string | null }) {
+function TerminalInstance({
+  isActive,
+  projectId,
+}: {
+  isActive: boolean;
+  projectId: string;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -22,128 +29,160 @@ function TerminalInstance({ isActive, projectId, welcomePort }: { isActive: bool
 
     const term = new XTerm({
       cursorBlink: true,
-      cursorStyle: 'block',
+      cursorStyle: 'bar',
       fontSize: 13,
-      fontFamily: '"Geist Mono", "Cascadia Code", Menlo, monospace',
+      lineHeight: 1.5,
+      letterSpacing: 0.5,
+      fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", "Geist Mono", Menlo, monospace',
       theme: {
-        background: '#050505',
-        foreground: '#e6edf3',
-        cursor: '#58a6ff',
-        selectionBackground: '#58a6ff33',
+        background:   '#11111b', // Catppuccin Mocha Mantle
+        foreground:   '#cdd6f4',
+        cursor:       '#f5e0dc',
+        cursorAccent: '#1e1e2e',
+        selectionBackground: '#585b7066',
+        black:        '#45475a',
+        red:          '#f38ba8',
+        green:        '#a6e3a1',
+        yellow:       '#f9e2af',
+        blue:         '#89b4fa',
+        magenta:      '#cba6f7',
+        cyan:         '#89dceb',
+        white:        '#bac2de',
+        brightBlack:  '#585b70',
+        brightRed:    '#f38ba8',
+        brightGreen:  '#a6e3a1',
+        brightYellow: '#f9e2af',
+        brightBlue:   '#89b4fa',
+        brightMagenta:'#cba6f7',
+        brightCyan:   '#89dceb',
+        brightWhite:  '#a6adc8',
       },
       allowTransparency: true,
-      scrollback: 1000,
+      scrollback: 5000,
     });
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.loadAddon(new WebLinksAddon());
-    
+
     term.open(containerRef.current);
     terminalRef.current = term;
 
     const resizeObserver = new ResizeObserver(() => {
-       if (isActive) fitAddon.fit();
+      if (isActive) fitAddon.fit();
     });
     resizeObserver.observe(containerRef.current);
 
     const token = localStorage.getItem('token');
-    // Using the correct URL from router.go: r.GET("/ws/terminal/:id", ...)
-    const ws = new WebSocket(`ws://localhost:3000/ws/terminal/${projectId}?token=${token}&cols=${term.cols}&rows=${term.rows}`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(
+      `${protocol}//${window.location.host}/ws/${projectId}?token=${token}&cols=${term.cols}&rows=${term.rows}`
+    );
     wsRef.current = ws;
 
     ws.onopen = () => {
-       fitAddon.fit();
+      fitAddon.fit();
+      // Send a newline to trigger the shell prompt
+      ws.send(JSON.stringify({ type: 'terminal', projectId, filePath: '', payload: '\n' }));
     };
 
-    ws.onmessage = async (e) => {
-       if (e.data instanceof Blob) {
-           const text = await e.data.text();
-           term.write(text);
-       } else {
-           term.write(e.data);
-       }
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'terminal') {
+          term.write(msg.payload);
+        }
+      } catch (err) {
+        console.error('Failed to parse WS message:', err);
+      }
     };
 
-    term.onData(data => {
-       if (ws.readyState === WebSocket.OPEN) {
-          ws.send(data);
-       }
+    ws.onerror = () => {
+      term.write('\r\n\x1b[1;31m✗ Connection error. Please refresh.\x1b[0m\r\n');
+    };
+
+    ws.onclose = () => {
+      term.write('\r\n\x1b[38;5;240m[session closed]\x1b[0m\r\n');
+    };
+
+    term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'terminal', projectId, filePath: '', payload: data }));
+      }
     });
 
     return () => {
-       resizeObserver.disconnect();
-       term.dispose();
-       ws.close();
+      resizeObserver.disconnect();
+      term.dispose();
+      ws.close();
     };
   }, [projectId]);
 
-  const hasWelcomed = useRef(false);
+  // Welcome message removed as per user request for cleaner terminal start
 
   useEffect(() => {
-     if (welcomePort && terminalRef.current && !hasWelcomed.current) {
-        hasWelcomed.current = true;
-        const msg = `\r\n\x1b[1;36m📦 Installing dependencies and starting the dev server in the background...\x1b[0m\r\n\x1b[1;32m🚀 Your app will soon be available at: http://localhost:${welcomePort}\x1b[0m\r\n\x1b[1;33m(Note: It may take a minute for 'npm install' to finish)\x1b[0m\r\n\r\n`;
-        terminalRef.current.write('\x1b[2K\r' + msg);
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-             wsRef.current.send('\n');
+    if (isActive && terminalRef.current) {
+      terminalRef.current.focus();
+      // Re-fit on tab switch
+      setTimeout(() => {
+        const container = containerRef.current;
+        if (container) {
+          const fitAddon = new FitAddon();
+          terminalRef.current?.loadAddon(fitAddon);
+          fitAddon.fit();
         }
-     }
-  }, [welcomePort]);
-
-  useEffect(() => {
-     if (isActive && terminalRef.current) {
-         terminalRef.current.focus();
-     }
+      }, 50);
+    }
   }, [isActive]);
 
   return (
     <div
       ref={containerRef}
-      className={`absolute inset-0 p-2 ${isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
+      className={`absolute inset-0 px-1 pt-1 ${isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
     />
   );
 }
+
+let sessionCounter = 0;
 
 export function Terminal() {
   const { activeProjectID } = useProject();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [port, setPort] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeProjectID) return;
-    
+    setUrl(null);
+
     let interval: ReturnType<typeof setInterval>;
-    
-    const fetchPort = async () => {
+
+    const fetchURL = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get(`http://localhost:3000/user/projects/${activeProjectID}/port`, {
-          headers: { Authorization: `Bearer ${token}` }
+        const res = await axios.get(`/api/user/projects/${activeProjectID}/port`, {
+          headers: { Authorization: `Bearer ${token}` },
         });
-        if (res.data.port) {
-            setPort(res.data.port);
-            return true;
+        if (res.data.url) {
+          setUrl(res.data.url);
+          return true;
         }
       } catch (e) {
         console.error(e);
       }
       return false;
     };
-    
-    fetchPort().then(found => {
-        if (!found) {
-            interval = setInterval(async () => {
-                const isFound = await fetchPort();
-                if (isFound) clearInterval(interval);
-            }, 3000);
-        }
+
+    fetchURL().then((found) => {
+      if (!found) {
+        interval = setInterval(async () => {
+          const ok = await fetchURL();
+          if (ok) clearInterval(interval);
+        }, 3000);
+      }
     });
 
-    return () => {
-        if (interval) clearInterval(interval);
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [activeProjectID]);
 
   useEffect(() => {
@@ -153,82 +192,97 @@ export function Terminal() {
   }, [activeProjectID]);
 
   const createSession = () => {
+    sessionCounter += 1;
     const id = crypto.randomUUID();
-    setSessions(prev => [...prev, { id, name: 'bash' }]);
+    setSessions((prev) => [...prev, { id, name: `bash ${sessionCounter}`, index: sessionCounter }]);
     setActiveSessionId(id);
-  }
+  };
 
   const removeSession = (id: string, e: React.MouseEvent) => {
-     e.stopPropagation();
-     setSessions(prev => prev.filter(s => s.id !== id));
-     if (activeSessionId === id && sessions.length > 1) {
-         setActiveSessionId(sessions[0].id === id ? sessions[1].id : sessions[0].id);
-     }
-  }
+    e.stopPropagation();
+    setSessions((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      if (activeSessionId === id && next.length > 0) {
+        setActiveSessionId(next[next.length - 1].id);
+      }
+      return next;
+    });
+  };
 
   if (!activeProjectID) {
     return (
-      <div className="h-full w-full bg-[#050505] flex items-center justify-center border-t border-zinc-800/50">
-        <span className="text-zinc-600 text-[11px] font-mono tracking-widest uppercase">Ready</span>
+      <div className="h-full w-full bg-[#0d0d0d] flex items-center justify-center border-t border-zinc-800/40">
+        <div className="flex items-center gap-2 text-zinc-700">
+          <SquareTerminal size={16} />
+          <span className="text-[11px] font-mono tracking-widest uppercase">No Active Project</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full w-full bg-[#050505] flex flex-col border-t border-zinc-800/50 relative">
-      <div className="h-9 bg-[#0a0a0a] border-b border-zinc-800/50 flex items-center justify-between px-2 shrink-0">
-        <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar">
-          {sessions.map(session => (
-            <div 
+    <div className="h-full w-full bg-[#0d0d0d] flex flex-col border-t border-zinc-800/40">
+      {/* Tab Bar */}
+      <div className="h-9 bg-[#111111] border-b border-zinc-800/50 flex items-center justify-between shrink-0 px-1">
+        <div className="flex items-center gap-0.5 overflow-x-auto hide-scrollbar">
+          {sessions.map((session) => (
+            <div
               key={session.id}
               onClick={() => setActiveSessionId(session.id)}
-              className={`group flex items-center gap-2 px-3 py-1.5 rounded-t-lg cursor-pointer transition-colors border-b-2 ${
-                activeSessionId === session.id 
-                  ? 'bg-[#151515] border-blue-500 text-blue-400' 
-                  : 'text-zinc-500 hover:bg-zinc-900 border-transparent hover:text-zinc-300'
+              className={`group flex items-center gap-1.5 px-3 py-1 rounded cursor-pointer transition-all text-[11px] font-mono select-none ${
+                activeSessionId === session.id
+                  ? 'bg-[#1e1e2e] text-[#cba6f7] border border-[#313244]'
+                  : 'text-zinc-600 hover:text-zinc-400 hover:bg-zinc-900/50 border border-transparent'
               }`}
             >
-              <TerminalIcon size={13} className={activeSessionId === session.id ? "text-blue-500" : "text-zinc-600"} />
-              <span className="text-[11px] font-medium tracking-wide">{session.name}</span>
-              <X 
-                size={12} 
-                className="opacity-0 group-hover:opacity-100 hover:bg-zinc-700 rounded p-0.5 transition-all text-zinc-400" 
+              <span className={activeSessionId === session.id ? 'text-[#a6e3a1]' : 'text-zinc-700'}>❯</span>
+              <span>{session.name}</span>
+              <X
+                size={11}
+                className="opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity ml-0.5 shrink-0"
                 onClick={(e) => removeSession(session.id, e)}
               />
             </div>
           ))}
-          <button 
+          <button
             onClick={createSession}
-            className="p-1 px-2 text-zinc-600 hover:text-zinc-300 transition-colors ml-1 rounded flex items-center"
-            title="New Terminal Session"
+            className="flex items-center justify-center w-7 h-7 text-zinc-700 hover:text-zinc-400 hover:bg-zinc-900/50 rounded transition-all ml-0.5"
+            title="New Terminal"
           >
-            <Plus size={14} />
+            <Plus size={13} />
           </button>
         </div>
-        
-        <div className="flex items-center gap-3 pr-2">
-          {port && (
-            <a 
-              href={`http://localhost:${port}`}
+
+        {/* Open App Button */}
+        <div className="flex items-center gap-2 pr-2 shrink-0">
+          {url ? (
+            <a
+              href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-2 px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-[0_0_15px_rgba(37,99,235,0.2)] active:scale-95 border border-blue-500/50"
+              className="group flex items-center gap-1.5 px-3 py-1 bg-[#1e1e2e] hover:bg-[#313244] text-[#89b4fa] border border-[#313244] hover:border-[#89b4fa]/40 rounded text-[11px] font-mono transition-all"
             >
-              <Globe size={13} strokeWidth={2.5} className="group-hover:rotate-12 transition-transform" />
+              <Rocket size={11} className="group-hover:translate-y-[-1px] transition-transform" />
               <span>Open App</span>
+              <Globe size={10} className="text-[#6c7086]" />
             </a>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3 py-1 text-[#6c7086] border border-zinc-800/50 rounded text-[11px] font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-500/70 animate-pulse" />
+              <span>Starting…</span>
+            </div>
           )}
         </div>
       </div>
 
-      <div className="flex-1 relative overflow-hidden">
-        {sessions.map((session, index) => (
-           <TerminalInstance 
-             key={session.id} 
-             isActive={activeSessionId === session.id} 
-             projectId={activeProjectID as string} 
-             welcomePort={index === 0 ? port : null}
-           />
+      {/* Terminal Instances */}
+      <div className="flex-1 relative overflow-hidden bg-[#0d0d0d]">
+        {sessions.map((session) => (
+          <TerminalInstance
+            key={session.id}
+            isActive={activeSessionId === session.id}
+            projectId={activeProjectID as string}
+          />
         ))}
       </div>
     </div>

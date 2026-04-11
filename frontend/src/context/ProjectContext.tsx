@@ -19,6 +19,9 @@ interface ProjectContextType {
   activeFile: string | null;
   setActiveFile: (path: string | null) => void;
   closeProject: () => Promise<void>;
+  socket: WebSocket | null;
+  sendEdit: (path: string, content: string) => void;
+  onEditReceived: (callback: (path: string, content: string) => void) => () => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -27,12 +30,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [activeProjectID, setActiveProjectID] = useState<string | null>(null);
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [editCallbacks, setEditCallbacks] = useState<((path: string, content: string) => void)[]>([]);
 
   const loadFileTree = async () => {
     if (!activeProjectID) return;
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`http://localhost:3000/user/projects/${activeProjectID}/tree`, {
+      const res = await axios.get(`/api/user/projects/${activeProjectID}/tree`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setFileTree(res.data);
@@ -45,7 +50,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!activeProjectID) return '';
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`http://localhost:3000/user/projects/${activeProjectID}/file?path=${path}`, {
+      const res = await axios.get(`/api/user/projects/${activeProjectID}/file?path=${path}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data.content;
@@ -59,7 +64,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!activeProjectID) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:3000/user/projects/${activeProjectID}/file`, {
+      await axios.post(`/api/user/projects/${activeProjectID}/file`, {
         path,
         content
       }, {
@@ -74,7 +79,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!activeProjectID) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`http://localhost:3000/user/projects/${activeProjectID}/close`, {}, {
+      await axios.post(`/api/user/projects/${activeProjectID}/close`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setActiveProjectID(null);
@@ -84,6 +89,63 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.error("Failed to close project", err);
       throw err;
     }
+  };
+
+  // WebSocket for collaboration
+  useEffect(() => {
+    if (!activeProjectID) {
+      if (socket) {
+        socket.close();
+        setSocket(null);
+      }
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/${activeProjectID}?token=${token}`);
+    
+    ws.onopen = () => {
+      console.log("Collaboration WebSocket connected");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'edit') {
+          // Broadcasted edit from another user
+          const { filePath, payload } = msg;
+          editCallbacks.forEach(cb => cb(filePath, payload));
+        }
+      } catch (err) {
+        console.error("Failed to parse collaboration message", err);
+      }
+    };
+
+    setSocket(ws);
+
+    return () => {
+      ws.close();
+      setSocket(null);
+    };
+  }, [activeProjectID]);
+
+  const sendEdit = (path: string, content: string) => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: 'edit',
+        projectId: activeProjectID,
+        filePath: path,
+        payload: content
+      }));
+    }
+  };
+
+  const onEditReceived = (callback: (path: string, content: string) => void) => {
+    setEditCallbacks(prev => [...prev, callback]);
+    return () => {
+      setEditCallbacks(prev => prev.filter(cb => cb !== callback));
+    };
   };
 
   useEffect(() => {
@@ -102,7 +164,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       saveFile,
       activeFile,
       setActiveFile,
-      closeProject
+      closeProject,
+      socket,
+      sendEdit,
+      onEditReceived
     }}>
       {children}
     </ProjectContext.Provider>

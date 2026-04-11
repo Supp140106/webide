@@ -19,7 +19,7 @@ const SignUp: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await axios.post('http://localhost:3000/auth/send-otp', { email });
+      await axios.post('/api/auth/send-otp', { email });
       setStep(2);
       toast.success('Verification signal transmitted.');
     } catch (err: any) {
@@ -33,7 +33,7 @@ const SignUp: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:3000/auth/verify-otp', {
+      const res = await axios.post('/api/auth/verify-otp', {
         email,
         code: otp,
         name,

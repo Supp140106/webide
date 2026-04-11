@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -8,7 +9,6 @@ import (
 	"server/config"
 	"server/models"
 	"server/service"
-	"server/utils"
 	"strings"
 	"time"
 
@@ -70,17 +70,15 @@ func OpenProject(c *gin.Context) {
 
 	// Reuse existing container if running
 	if dockerSvc.IsContainerRunning(containerName) {
-		port, err := dockerSvc.GetContainerPort(containerName)
-		if err == nil {
-			c.JSON(http.StatusOK, gin.H{
-				"message":   "Project is already running",
-				"projectId": projectID,
-				"container": containerName,
-				"repoName":  repoName,
-				"port":      port,
-			})
-			return
-		}
+		url := fmt.Sprintf("http://%s.localhost", containerName)
+		c.JSON(http.StatusOK, gin.H{
+			"message":   "Project is already running",
+			"projectId": projectID,
+			"container": containerName,
+			"repoName":  repoName,
+			"url":       url,
+		})
+		return
 	}
 
 	// Prepare workspace
@@ -98,17 +96,30 @@ func OpenProject(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to restore workspace"})
 			return
 		}
+
+		// Validate workspace has a package.json — if not, re-clone from repoURL
+		pkgJSON := workspace + "/package.json"
+		if _, statErr := os.Stat(pkgJSON); os.IsNotExist(statErr) {
+			log.Printf("Workspace for %s is missing package.json — re-cloning from %s", projectID, req.RepoURL)
+			if req.RepoURL == "" {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Workspace is corrupted and no repoUrl provided to re-clone"})
+				return
+			}
+			// Wipe and re-clone
+			os.RemoveAll(workspace)
+			os.MkdirAll(workspace, os.ModePerm)
+			if err := gitSvc.CloneRepo(req.RepoURL, workspace); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Workspace corrupted and re-clone failed: " + err.Error()})
+				return
+			}
+		}
 	}
 
-	// Start environment
-	port, err := utils.GetFreePort()
+	// Start environment via Traefik dynamic subdomain
+	url, err := dockerSvc.StartContainer(containerName, workspace)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign port"})
-		return
-	}
-
-	if err := dockerSvc.StartContainer(containerName, workspace, port); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Docker start failed"})
+		log.Printf("Failed to start container %s: %v", containerName, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Docker start failed: " + err.Error()})
 		return
 	}
 
@@ -131,7 +142,7 @@ func OpenProject(c *gin.Context) {
 		"projectId": projectID,
 		"container": containerName,
 		"repoName":  repoName,
-		"port":      port,
+		"url":       url,
 	})
 }
 
@@ -293,14 +304,14 @@ func SaveFileContent(c *gin.Context) {
 func GetProjectPort(c *gin.Context) {
 	projectID := c.Param("id")
 	containerName := "project-" + projectID
-
-	port, err := dockerSvc.GetContainerPort(containerName)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Port not found"})
+ 
+	if !dockerSvc.IsContainerRunning(containerName) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Environment not running"})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"port": port})
+ 
+	url := fmt.Sprintf("http://%s.localhost", containerName)
+	c.JSON(http.StatusOK, gin.H{"url": url})
 }
 
 func SaveProject(c *gin.Context) {

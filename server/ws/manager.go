@@ -137,6 +137,9 @@ func (m *Manager) broadcast(msgType string, filePath string, data []byte) {
 		FilePath:  filePath,
 		Payload:   payload,
 	}
-	// Broadcast to the hub instead of direct write to single connection
-	GlobalHub.Broadcast(msg)
+	// Send directly to this client only — terminal output must NOT bleed to other sessions
+	select {
+	case m.client.Send <- msg:
+	default:
+	}
 }

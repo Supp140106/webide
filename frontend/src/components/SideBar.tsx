@@ -4,11 +4,14 @@ import { useProject } from "../context/ProjectContext"
 import { LogOut, Settings, RefreshCw } from "lucide-react"
 import { useState } from "react"
 import { ConfirmModal } from "./ConfirmModal"
+import { ShareDialog } from "./ShareDialog"
+import { UserPlus } from "lucide-react"
 
 export default function Sidebar() {
     const { user, logout } = useAuth()
     const { fileTree, loadFileTree, setActiveFile, closeProject } = useProject()
     const [isClosing, setIsClosing] = useState(false)
+    const [isSharing, setIsSharing] = useState(false)
 
     return (
         <div
@@ -28,6 +31,11 @@ export default function Sidebar() {
                         size={14} 
                         className="text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors" 
                         onClick={() => loadFileTree()}
+                    />
+                    <UserPlus 
+                        size={14} 
+                        className="text-blue-500/70 hover:text-blue-400 cursor-pointer transition-colors" 
+                        onClick={() => setIsSharing(true)}
                     />
                     <Settings size={14} className="text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors" />
                 </div>
@@ -90,6 +98,11 @@ export default function Sidebar() {
                         setIsClosing(false);
                         window.location.href = '/dashboard';
                     }}
+                />
+
+                <ShareDialog 
+                    isOpen={isSharing} 
+                    onClose={() => setIsSharing(false)} 
                 />
             </div>
         </div>

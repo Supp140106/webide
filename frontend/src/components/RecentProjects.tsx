@@ -26,10 +26,13 @@ export function RecentProjects() {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-      const res = await axios.get('http://localhost:3000/user/projects', {
+      const res = await axios.get('/api/user/projects', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setProjects(res.data.projects || []);
+      // The backend now returns { owned: [], shared: [] }
+      const owned = res.data.owned || [];
+      const shared = res.data.shared || [];
+      setProjects([...owned, ...shared]);
     } catch (err) {
       console.error("Failed to fetch projects", err);
     } finally {
@@ -41,9 +44,10 @@ export function RecentProjects() {
     if (openingId) return;
     setOpeningId(projectId);
     try {
+      const project = projects.find(p => p.id === projectId);
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:3000/user/open-project', 
-        { projectId },
+      await axios.post('/api/user/open-project', 
+        { projectId, repoUrl: project?.repoUrl },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       navigate(`/project/${projectId}`);
@@ -58,7 +62,7 @@ export function RecentProjects() {
   const handleDeleteProject = async (projectId: string) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:3000/user/projects/${projectId}`, {
+      await axios.delete(`/api/user/projects/${projectId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProjectToDelete(null);

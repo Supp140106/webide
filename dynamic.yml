@@ -1,0 +1,35 @@
+http:
+  routers:
+    frontend:
+      rule: "PathPrefix(`/`)"
+      service: frontend
+      priority: 1
+
+    api:
+      rule: "PathPrefix(`/api`)"
+      service: backend
+      middlewares:
+        - api-strip-prefix
+      priority: 20
+
+    ws:
+      rule: "PathPrefix(`/ws`)"
+      service: backend
+      priority: 30
+
+  middlewares:
+    api-strip-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api"
+
+  services:
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:5173"
+
+    backend:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3000"

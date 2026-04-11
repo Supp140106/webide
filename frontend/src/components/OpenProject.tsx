@@ -19,7 +19,7 @@ const OpenProject: React.FC = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:3000/user/open-project', 
+      const response = await axios.post('/api/user/open-project', 
         { repoUrl },
         { 
           headers: { Authorization: `Bearer ${token}` },

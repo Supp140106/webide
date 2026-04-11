@@ -1,0 +1,25 @@
+services:
+  traefik:
+    image: traefik:v2.11
+    container_name: traefik
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./dynamic.yml:/dynamic.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - traefik_net
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.network=traefik_net"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.filename=/dynamic.yml"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--accesslog=true"
+
+networks:
+  traefik_net:
+    name: traefik_net

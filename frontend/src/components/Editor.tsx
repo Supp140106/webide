@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import { X, Save, FileCode } from 'lucide-react';
 import { useProject } from '../context/ProjectContext';
@@ -12,9 +12,22 @@ interface Tab {
 }
 
 export function Editor() {
-  const { activeFile, setActiveFile, openFile, saveFile } = useProject();
+  const { activeFile, setActiveFile, openFile, saveFile, sendEdit, onEditReceived } = useProject();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Handle incoming edits from other users
+  useEffect(() => {
+    const cleanup = onEditReceived((path, content) => {
+      setTabs(prev => prev.map(t => {
+        if (t.id === path && t.content !== content) {
+          return { ...t, content };
+        }
+        return t;
+      }));
+    });
+    return cleanup;
+  }, [onEditReceived]);
 
   // When a file is selected in sidebar (from context)
   useEffect(() => {
@@ -68,19 +81,37 @@ export function Editor() {
   };
 
   const handleChange = (value: string | undefined) => {
+    const newContent = value ?? '';
+    if (activeId) {
+        // Broadcast the edit to others
+        sendEdit(activeId, newContent);
+    }
     setTabs(prev =>
-      prev.map(t => (t.id === activeId ? { ...t, content: value ?? '', isDirty: true } : t))
+      prev.map(t => (t.id === activeId ? { ...t, content: newContent, isDirty: true } : t))
     );
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (activeTab && activeTab.isDirty) {
         await saveFile(activeTab.id, activeTab.content);
         setTabs(prev =>
             prev.map(t => (t.id === activeId ? { ...t, isDirty: false } : t))
         );
     }
-  };
+  }, [activeTab, activeId, saveFile]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Logic for Ctrl + S or Cmd + S
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSave]);
 
   if (!activeTab) {
     return (
