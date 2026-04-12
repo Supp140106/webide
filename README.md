@@ -88,7 +88,7 @@ graph TD
 
 1. **Clone the repository**
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/Supp140106/webide.git
    cd webide
    ```
 
